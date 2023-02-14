@@ -37,7 +37,7 @@ for direc, subdirects, files in os.walk('.'):
 		year = leftover[1:-4]
 
 		#Read csv data from good old scan-o-matic 2000.
-		with open(direc + '/' + csvfile, 'rb') as rawdata:
+		with open(direc + '/' + csvfile, 'r') as rawdata:
 			reader = csv.reader(rawdata)
 			str_eval_scores = list(reader)
 
