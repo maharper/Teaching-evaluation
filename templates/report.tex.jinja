@@ -1,0 +1,88 @@
+\documentclass[letterpaper,11pt]{exam}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{multirow}
+\usepackage{booktabs, tabularx, xltabular}
+\usepackage{sparklines}
+
+% for jinja compatibility
+% see https://tug.org/tug2019/slides/slides-ziegenhagen-python.pdf
+\newcommand{\VAR}[1]{}
+\newcommand{\BLOCK}[1]{}
+
+%\textheight=9.4in
+
+\makeatletter
+\let\@oddfoot\@empty
+\let\@evenfoot\@empty
+\makeatletter
+\addtolength{\topmargin}{0.15in}
+
+\pagestyle{headandfoot}
+\firstpageheadrule
+\firstpageheader{\LARGE{Evaluations - \VAR{course['term']} \VAR{course['year']} - \VAR{course['course']} Sec.\,\VAR{course['section']}}}{}{\LARGE{\VAR{teacher[0]}.~\VAR{teacher[1:]}}}
+\runningheader{}{}{}
+\firstpagefooter{}{}{}
+\runningfooter{}{}{}
+
+\newlength{\myrowskip}
+\setlength{\myrowskip}{12pt plus 4pt minus 4pt}
+\newlength{\myfirstrowskip}
+\setlength{\myfirstrowskip}{6pt plus 2pt minus 2pt}
+
+\definecolor{sparkspikecolor}{named}{red}
+\setlength{\sparkspikewidth}{1.9ex}
+\setlength\sparkbottomlinethickness{1pt}
+\renewcommand{\sparklineheight}{3.5}
+
+\setlength{\rightpointsmargin}{1.3cm}
+\pointsinrightmargin
+\marginpointname{\ P.}
+\boxedpoints
+\addpoints
+\totalformat{\fbox{Total: \totalpoints}}
+
+\begin{document}
+
+Students are given the following five options for responses to each survey question.
+\begin{center}
+\begin{tabular}{l}
+1 - Rarely/Low/Unsatisfactory/Light \\
+2 - Sometimes/Mediocre/Needed Improvement \\
+3 - Normally/Medium/Satisfactory \\
+4 - Often/Very Good/Heavy \\
+5 - Frequently/Very Heavy/Excellent/Always
+\end{tabular}
+\end{center}
+\vspace{0.0in}
+
+\begin{center}
+\begin{xltabular}{\linewidth}{Xccr}\toprule
+\qquad\qquad\qquad \ \ Question & \ \ \ Summary \ \ \ & \ \ Frequencies (1 $\rightarrow$ 5) \ \  & \\
+\midrule\\ \endhead
+\bottomrule\endfoot
+
+%- for question in questions
+	%- set i = loop.index0
+\multirow{2}{=}{\VAR{question[0]}} &
+	\multirow{2}{*}{}$\overline{x} = \VAR{averages[i]}$ &
+	\multirow{2}{*}{
+		\BLOCK{- for j in range(0,5) -}
+			\VAR{- freqs[i][j]}\VAR{" - " if not loop.last else "" -}
+		\BLOCK{ endfor } } &
+	\multirow{2}{*}{
+	\begin{sparkline}{10}
+		\sparkspike 0.1 \VAR{freqs[i][0] | int /12}
+		\sparkspike 0.3 \VAR{freqs[i][1] | int /12}
+		\sparkspike 0.5 \VAR{freqs[i][2] | int /12}
+		\sparkspike 0.7 \VAR{freqs[i][3] | int /12}
+		\sparkspike 0.9 \VAR{freqs[i][4] | int /12}
+		\sparkbottomline[1.0]
+	\end{sparkline} 
+}		
+		\\*
+ & $s = \VAR{stdevs[i]}$ & & \\[\myrowskip]
+%- endfor
+\end{xltabular}
+\end{center}
+\end{document}
