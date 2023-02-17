@@ -1,135 +1,178 @@
 #Automated Teacher Evaluations
 #Brendan Cordy, 2015
+# Malcolm Harper 2023
 
 import csv
 import os
-import stats
+# not used in the current incarnation
 from decimal import *
 import json
+from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-# Get the question texts
+import stats
 
-question_texts = 'templates/opscan1.json'
-with open(question_texts, 'r') as question_file:
-	questions = json.load(question_file)
+def main():
 
-# Define the output format
+    # Define the data formats
 
-template_file = 'report.tex.jinja'
-file_loader = FileSystemLoader('templates')
-latex_jinja_env = Environment(
-	block_start_string =    '\BLOCK{',
-	block_end_string =      '}',
-	variable_start_string = '\VAR{',
-	variable_end_string =   '}',
-	comment_start_string =  '\#{',
-	comment_end_string =    '}',
-	line_statement_prefix = '%-',
-	line_comment_prefix =   '%#',
-	trim_blocks = True,
-	lstrip_blocks=True,
-	autoescape = False,
-	loader=file_loader,
-	)
-template = latex_jinja_env.get_template(template_file)
+    # Get the opscan question texts
+    questions_opscan_mc, questions_opscan_la = configure_opscan_data('templates/opscan1.json')
+    
+    # Define the output format
+    template = configure_tex('report.tex.jinja')
 
-#Find csvs in subdirectories without corresponding texs.
-for direc, subdirects, files in os.walk('.'):
-	tex_filenames = [f[:-4] for f in files if f[-4:] == '.tex']
-	csv_filenames = [f[:-4] for f in files if f[-4:] == '.asc']
-	unevaluated = list(set(csv_filenames)-set(tex_filenames))
-	unevaluated_csvs = [f + '.asc' for f in unevaluated]
+    # Find data that needs processing
 
-	for csvfile in unevaluated_csvs:
-		#Extract teacher, section, and term information.
-		name_sep = csvfile.index('-')
-		teacher_name = csvfile[:name_sep]
-		leftover = csvfile[name_sep+1:]
+    #Find csvs in subdirectories without corresponding texs.
+    for direc, subdirects, files in os.walk('.'):
+        # This is not as elegant as Brendan's technique, but it allows us to track both .csv and .asc
+        unevaluated = []
+        for f in files:
+            # opscan files
+            if f[-4:] == '.asc':
+                course = course_opscan(f)
+                output_file = Path(direc)/Path(tex_filename(course)+'.tex')
+                if not output_file.is_file():
+                    unevaluated.append({'data_file':Path(direc)/Path(f), 'type':'opscan', 'course':course, 'tex_file':output_file})
 
-		course_sep = leftover.index('s')
-		course = leftover[:course_sep]
-		leftover = leftover[course_sep+1:]
+            # Survey Monkey summary files
+            if f[-4:] == '.csv':
+                course = course_sm(f)
+                if not course : pass
+                output_file = Path(direc)/Path(tex_filename(course)+'.tex')
+                if not output_file.is_file():
+                    unevaluated.append({'data_file':Path(direc)/Path(f), 'type':'sm_summary', 'course':course, 'tex_file':output_file})
 
-		section_sep = leftover.index('-')
-		section = leftover[:section_sep]
-		leftover = leftover[section_sep+1:]
+        for report in unevaluated:
+            print(f"Processing {report['data_file']}.")
+            if report['type'] == 'opscan':
+                questions_mc = questions_opscan_mc
+                questions_la = questions_opscan_la
+                #Read csv data from good old scan-o-matic 2000.
+                with open(report['data_file'], 'r') as rawdata:
+                    reader = csv.reader(rawdata)
+                    str_eval_scores = list(reader)
+                #Create a list of lists of integer scores for each question. Throw away the blanks.
+                eval_scores = clean_opscan_data(str_eval_scores)
+                # Sanity check
+                if len(eval_scores) != len(questions_mc):
+                    raise SystemExit(f"Wrong number of questions in {report['data_file']}.  Stopping.")
+                #Find frequences for each question.
+                freqs = []
+                for i in range(len(eval_scores)):
+                    counts_list = [0,0,0,0,0]
+                    for j in range(len(eval_scores[i])):
+                        if((eval_scores[i])[j] == 1):
+                            counts_list[0]+=1
+                        elif((eval_scores[i])[j] == 2):
+                            counts_list[1]+=1
+                        elif((eval_scores[i])[j] == 3):
+                            counts_list[2]+=1
+                        elif((eval_scores[i])[j] == 4):
+                            counts_list[3]+=1
+                        elif((eval_scores[i])[j] == 5):
+                            counts_list[4]+=1
+                    freqs.append(counts_list)
 
-		if(leftover[0] == 'F'):
-			term = 'Fall'
-		elif(leftover[0] == 'W'):
-			term = 'Winter'
-		else:
-			term = 'Summer'
+                max_responses = max([stats.n_f(counts) for counts in freqs])
 
-		year = leftover[1:-4]
+            for i in range(len(questions_mc)):
+                questions_mc[i]['responses'], questions_mc[i]['mean'], questions_mc[i]['stdev'] = stats.stats_f(freqs[i])
+                questions_mc[i]['freqs'] = [str(x) for x in freqs[i]]
+                questions_mc[i]['sparks'] = [freqs[i][j]/max_responses for j in range(5)]
 
-		#Read csv data from good old scan-o-matic 2000.
-		with open(direc + '/' + csvfile, 'r') as rawdata:
-			reader = csv.reader(rawdata)
-			str_eval_scores = list(reader)
+            tex_document = template.render(
+                {'course':course,
+                'questions_mc':questions_mc,
+                'questions_la':questions_la,
+                },
+                undefined=StrictUndefined)
 
-		#Create a list of lists of integer scores for each question. Throw away the blanks.
-		eval_scores = []
-		for i in range(len(str_eval_scores[0])):
-			cleaned_column = []
-			for j in range(len(str_eval_scores)):
-				if (str_eval_scores[j])[i] == 'BLANK':
-					pass
-				elif (str_eval_scores[j])[i] == 'MULT':
-					pass
-				elif (str_eval_scores[j])[i] == '*':
-					pass
-				else:
-					cleaned_column.append(int(float((str_eval_scores[j])[i])))
-			eval_scores.append(cleaned_column)
+            #Write the tex file.
+            with open(report['tex_file'], 'w') as eval_report:
+                print(f"Writing {report['tex_file']}.")
+                eval_report.write(tex_document)
 
-		#Find average for each question.
-		averages = []
-		for i in range(len(eval_scores)):
-			averages.append(str(Decimal(stats.mean(eval_scores[i])).quantize(Decimal('.01'))))
+def configure_opscan_data(question_texts):
+    """Read and return the question texts (list of dicts) for opscan questionnaires."""
+    with open(question_texts, 'r') as question_file:
+        return json.load(question_file), False
 
-		#Find sample std dev for each question.
-		stdevs = []
-		for i in range(len(eval_scores)):
-			stdevs.append(str(Decimal(stats.stdev(eval_scores[i])).quantize(Decimal('.01'))))
+def configure_tex(template_file):
+    file_loader = FileSystemLoader('templates')
+    latex_jinja_env = Environment(
+        block_start_string =    '\BLOCK{',
+        block_end_string =      '}',
+        variable_start_string = '\VAR{',
+        variable_end_string =   '}',
+        comment_start_string =  '\#{',
+        comment_end_string =    '}',
+        line_statement_prefix = '%-',
+        line_comment_prefix =   '%#',
+        trim_blocks = True,
+        lstrip_blocks=True,
+        autoescape = False,
+        loader=file_loader,
+        )
+    return latex_jinja_env.get_template(template_file)
 
-		#Find frequences for each question.
-		int_freqs = []
-		for i in range(len(eval_scores)):
-			counts_list = [0,0,0,0,0]
-			for j in range(len(eval_scores[i])):
-				if((eval_scores[i])[j] == 1):
-					counts_list[0]+=1
-				elif((eval_scores[i])[j] == 2):
-					counts_list[1]+=1
-				elif((eval_scores[i])[j] == 3):
-					counts_list[2]+=1
-				elif((eval_scores[i])[j] == 4):
-					counts_list[3]+=1
-				elif((eval_scores[i])[j] == 5):
-					counts_list[4]+=1
-			int_freqs.append(counts_list)
+def course_opscan(filename):
+    """Extract teacher, section, and term information."""
+    name_sep = filename.index('-')
+    teacher_name = [filename[:name_sep][0], filename[:name_sep][1:]]
+    leftover = filename[name_sep+1:]
 
-		#Cast the frequencies to strings.
-		freqs = []
-		for i in range(len(int_freqs)):
-			str_counts_list = []
-			for j in range(len(int_freqs[i])):
-				str_counts_list.append(str((int_freqs[i])[j]))
-			freqs.append(str_counts_list)
+    course_sep = leftover.index('s')
+    course_number = leftover[:course_sep]
+    leftover = leftover[course_sep+1:]
 
-		tex_document = template.render(
-			{'teacher':teacher_name,
-			'course':{'year':year, 'term':term, 'course':course, 'section':section},
-			'questions':questions,
-			'averages':averages,
-			'stdevs':stdevs,
-			'freqs':freqs
-			},
-			undefined=StrictUndefined)
+    section_sep = leftover.index('-')
+    section_number = leftover[:section_sep]
+    leftover = leftover[section_sep+1:]
 
-		#Write the tex file.
-		with open(direc + '/' + csvfile[:-4] + '.tex', 'w') as eval_report:
-			eval_report.write(tex_document)
+    if(leftover[0] == 'F'):
+        term = 'Fall'
+    elif(leftover[0] == 'W'):
+        term = 'Winter'
+    else:
+        term = 'Summer'
+
+    year = leftover[1:5]
+
+    return {'course':course_number,'section':section_number, 'year':year, 'term':term, 'teacher':teacher_name}
+
+def course_sm(filename):
+    """Extract teacher, section, and term information from a csv filename and return as dict.  Return False if it is not possible."""
+    return False
+
+def tex_filename(course):
+    '''produce a standardized output filename
+        based on the course and teacher parameters
+    '''
+    return course['teacher'][0][0]+course['teacher'][1]+'-'+course['course']+'s'+course['section']+'-'+course['term'][0]+course['year']
+
+def clean_opscan_data(raw_data):
+    """Return a list of lists of integer scores.  Dirty data is removed."""
+    clean_data = []
+    for i in range(len(raw_data[0])):
+        cleaned_column = []
+        for j in range(len(raw_data)):
+            if (raw_data[j])[i] == 'BLANK':
+                pass
+            elif (raw_data[j])[i] == 'MULT':
+                pass
+            elif (raw_data[j])[i] == '*':
+                pass
+            else:
+                cleaned_column.append(int(float((raw_data[j])[i])))
+        clean_data.append(cleaned_column)
+    return clean_data
+
+# Not used in the current incarnation
+def format(x):
+    str(Decimal(x).quantize(Decimal('.01')))
+
+if __name__ == '__main__':
+    main()
