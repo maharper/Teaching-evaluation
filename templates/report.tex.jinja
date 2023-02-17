@@ -12,15 +12,15 @@
 
 %\textheight=9.4in
 
-\makeatletter
-\let\@oddfoot\@empty
-\let\@evenfoot\@empty
-\makeatletter
-\addtolength{\topmargin}{0.15in}
+%\makeatletter
+%\let\@oddfoot\@empty
+%\let\@evenfoot\@empty
+%\makeatletter
+%\addtolength{\topmargin}{0.15in}
 
-\pagestyle{headandfoot}
+\pagestyle{empty}
 \firstpageheadrule
-\firstpageheader{\LARGE{Evaluations - \VAR{course['term']} \VAR{course['year']} - \VAR{course['course']} Sec.\,\VAR{course['section']}}}{}{\LARGE{\VAR{teacher[0]}.~\VAR{teacher[1:]}}}
+\firstpageheader{\LARGE{Evaluations - \VAR{course['term']} \VAR{course['year']} - \VAR{course['course']} Sec.\,\VAR{course['section']}}}{}{\LARGE{\VAR{course['teacher'][0]}.~\VAR{course['teacher'][1]}}}
 \runningheader{}{}{}
 \firstpagefooter{}{}{}
 \runningfooter{}{}{}
@@ -33,16 +33,14 @@
 \definecolor{sparkspikecolor}{named}{red}
 \setlength{\sparkspikewidth}{1.9ex}
 \setlength\sparkbottomlinethickness{1pt}
-\renewcommand{\sparklineheight}{3.5}
-
-\setlength{\rightpointsmargin}{1.3cm}
-\pointsinrightmargin
-\marginpointname{\ P.}
-\boxedpoints
-\addpoints
-\totalformat{\fbox{Total: \totalpoints}}
+\renewcommand{\sparklineheight}{4.5}
 
 \begin{document}
+\thispagestyle{head}
+
+\BLOCK{ if questions_mc and questions_la -}
+\section*{Multiple choice questions}
+\BLOCK{- endif }
 
 Students are given the following five options for responses to each survey question.
 \begin{center}
@@ -58,31 +56,46 @@ Students are given the following five options for responses to each survey quest
 
 \begin{center}
 \begin{xltabular}{\linewidth}{Xccr}\toprule
-\qquad\qquad\qquad \ \ Question & \ \ \ Summary \ \ \ & \ \ Frequencies (1 $\rightarrow$ 5) \ \  & \\
+\qquad\qquad\qquad \ \ Question & \ \ Summary \ \ & \ Frequencies (1 $\rightarrow$ 5) \  & \\
 \midrule\\ \endhead
 \bottomrule\endfoot
 
-%- for question in questions
-	%- set i = loop.index0
-\multirow{2}{=}{\VAR{question[0]}} &
-	\multirow{2}{*}{}$\overline{x} = \VAR{averages[i]}$ &
-	\multirow{2}{*}{
-		\BLOCK{- for j in range(0,5) -}
-			\VAR{- freqs[i][j]}\VAR{" - " if not loop.last else "" -}
-		\BLOCK{ endfor } } &
-	\multirow{2}{*}{
-	\begin{sparkline}{10}
-		\sparkspike 0.1 \VAR{freqs[i][0] | int /12}
-		\sparkspike 0.3 \VAR{freqs[i][1] | int /12}
-		\sparkspike 0.5 \VAR{freqs[i][2] | int /12}
-		\sparkspike 0.7 \VAR{freqs[i][3] | int /12}
-		\sparkspike 0.9 \VAR{freqs[i][4] | int /12}
-		\sparkbottomline[1.0]
-	\end{sparkline} 
-}		
-		\\*
- & $s = \VAR{stdevs[i]}$ & & \\[\myrowskip]
+%- for question in questions_mc
+    %- set i = loop.index0
+\multirow{2}{=}{\VAR{question['text']} } &
+    \multirow{2}{*}{}$\overline{x} = \VAR{"%.2f"|format(question['mean'])}$ &
+    \multirow{2}{*}{
+        \BLOCK{- for j in range(question['freqs']|length) -}
+            \VAR{- question['freqs'][j]}\VAR{" - " if not loop.last else "" -}
+        \BLOCK{ endfor } } &
+    \multirow{2}{*}{
+    \begin{sparkline}{10}
+        \sparkrectangle 0 1
+        \BLOCK{ for j in range(question['freqs']|length) }
+        \sparkspike \VAR{"%.4f"|format(0.1+0.2*j)} \VAR{"%.4f"|format(question['sparks'][j])}
+        \BLOCK{ endfor }
+    \end{sparkline} 
+}        
+        \\*
+ & $s = \VAR{"%.2f"|format(question['stdev'])}$ & & \\[\myrowskip]
 %- endfor
 \end{xltabular}
 \end{center}
+
+\BLOCK{ if questions_mc and questions_la -}
+\section*{Open answer questions}
+%- for question in questions_la
+\subsection*{\VAR{question['text']}}
+\BLOCK{- if question['responses'] }
+\begin{itemize}
+%- for response in question['responses']
+\item \VAR{response}
+%- endfor
+\end{itemize}
+\BLOCK{ else }
+No responses were recorded to this question
+\BLOCK{ endif }
+%- endfor
+\BLOCK{- endif }
+
 \end{document}
