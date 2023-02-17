@@ -20,7 +20,7 @@
 
 \pagestyle{empty}
 \firstpageheadrule
-\firstpageheader{\LARGE{Evaluations - \VAR{course['term']} \VAR{course['year']} - \VAR{course['course']} Sec.\,\VAR{course['section']}}}{}{\LARGE{\VAR{course['teacher'][0]}.~\VAR{course['teacher'][1]}}}
+\firstpageheader{\LARGE{Evaluations - \VAR{course['term']} \VAR{course['year']} - \VAR{course['course']} Sec.\,\VAR{course['section']}}}{}{\LARGE{\VAR{course['teacher'][0]|first}.~\VAR{course['teacher'][1]}}}
 \runningheader{}{}{}
 \firstpagefooter{}{}{}
 \runningfooter{}{}{}
@@ -66,7 +66,7 @@ Students are given the following five options for responses to each survey quest
     \multirow{2}{*}{}$\overline{x} = \VAR{"%.2f"|format(question['mean'])}$ &
     \multirow{2}{*}{
         \BLOCK{- for j in range(question['freqs']|length) -}
-            \VAR{- question['freqs'][j]}\VAR{" - " if not loop.last else "" -}
+            \VAR{- question['freqs'][j]|string}\VAR{" - " if not loop.last else "" -}
         \BLOCK{ endfor } } &
     \multirow{2}{*}{
     \begin{sparkline}{10}
