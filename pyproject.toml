@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "teacher-evaluations"
+version = "0.1.0"
+description = "Script(s) for processing teaching evaluations"
+authors = ["Malcolm Harper <mharper@crcmail.net>"]
+readme = "README.md"
+packages = [{include = "teacher_evaluations"}]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+Jinja2 = "^3.1.2"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
