@@ -13,6 +13,7 @@ from decimal import *
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 import stats
+from filter_lib import j2_latex_filter
 
 def main():
 
@@ -87,7 +88,10 @@ def main():
                 with open(report['data_file'], 'r') as data_file:
                     sm_summary_data = data_file.read()
                 questions_mc, questions_la = parse_sm_summary(sm_summary_data)
-                print(questions_mc)
+                if questions_la:
+                    for question in questions_la:
+                        sm_comment_file = report['data_file'].parent/('Q'+question['number']+'_Text.csv')
+                        question['comments'] = sm_summary_comments(sm_comment_file)
 
             max_responses_mc = max([question['responses'] for question in questions_mc])
             for i in range(len(questions_mc)):
@@ -102,10 +106,8 @@ def main():
                 undefined=StrictUndefined)
 
             #Write the tex file.
-            print(f"Writing file {report['tex_file']}")
-            print(f"Course {report['course']}.")
             with open(report['tex_file'], 'w', encoding='utf-8') as eval_report:
-                print(f"Writing {report['tex_file']}.")
+                print(f"Writing file {report['tex_file']}.")
                 eval_report.write(tex_document)
 
 def configure_opscan_data(question_texts):
@@ -129,6 +131,8 @@ def configure_tex(template_file):
         autoescape = False,
         loader=file_loader,
         )
+    latex_jinja_env.filters['escape_latex'] = j2_latex_filter
+
     return latex_jinja_env.get_template(template_file)
 
 def course_opscan(filename):
@@ -222,9 +226,40 @@ def parse_sm_summary(sm_summary_data):
                         'freqs':[int(count) for count in rx_freqs.findall(question.group('q_freqs'))],
                         } for question in rx_questions_mc.finditer(sm_summary_data.replace("\xc2\xa0",' '))]
     
-    return questions_mc, False
+    rx_questions_la = re.compile(r"""
+        ^
+        Q(?P<q_number>\d{1,2})\.\s*
+        (?P<q_text>.+)$\n
+        \s*Answered\s*,(?P<q_responses>\d+)
+        [\s\S]*?
+        (?=^Q|\Z)
+    """, re.MULTILINE | re.VERBOSE)
+
+    questions_la = [{'number':question.group('q_number'),
+                        'text':question.group('q_text'),
+                        'responses':int(question.group('q_responses')),
+                        } for question in rx_questions_la.finditer(sm_summary_data.replace("\xc2\xa0",' '))]
+
+    return questions_mc, questions_la
+
+def sm_summary_comments(comment_file_path):
+    """Parse the comments from a Survey Monkey file.  Return a list of comments."""
+    if comment_file_path.is_file():
+        with open(comment_file_path, 'r', encoding='utf-8') as comments:
+            question_text = comments.readline()
+            reader = csv.DictReader(comments)
+            next(comments)
+            cols = reader.fieldnames
+            if 'Responses' not in cols:
+                print(f"    A column labelled 'Reponses' was not found in {comment_file_path}")
+                return [f"Responses column not found in {comment_file_path}"]
+            return [line['Responses'] for line in reader]
+    else:
+        print(f"    The comment file {comment_file_path} was not found")
+        return [f"The comment file {comment_file_path} was not found"]
 
 # Not used in the current incarnation
+# The rounding and truncating is done by jinja
 def format(x):
     str(Decimal(x).quantize(Decimal('.01')))
 

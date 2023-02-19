@@ -19,11 +19,8 @@
 %\addtolength{\topmargin}{0.15in}
 
 \pagestyle{empty}
-\firstpageheadrule
-\firstpageheader{\LARGE{Evaluations - \VAR{course['term']} \VAR{course['year']} - \VAR{course['course']} Sec.\,\VAR{course['section']}}}{}{\LARGE{\VAR{course['teacher'][0]|first}.~\VAR{course['teacher'][1]}}}
-\runningheader{}{}{}
-\firstpagefooter{}{}{}
-\runningfooter{}{}{}
+\headrule
+\header{\LARGE{Evaluations - \VAR{course['term']} \VAR{course['year']} - \VAR{course['course']} Sec.\,\VAR{course['section']}}}{}{\LARGE{\VAR{course['teacher'][0]|first}.~\VAR{course['teacher'][1]}}}
 
 \newlength{\myrowskip}
 \setlength{\myrowskip}{12pt plus 4pt minus 4pt}
@@ -56,7 +53,7 @@ Students are given the following five options for responses to each survey quest
 
 \begin{center}
 \begin{xltabular}{\linewidth}{Xccr}\toprule
-\qquad\qquad\qquad \ \ Question & \ \ Summary \ \ & \ Frequencies (1 $\rightarrow$ 5) \  & \\
+\qquad\qquad\qquad \ \ Question & \ Summary \  & \ Frequencies (1 $\rightarrow$ 5) \  & \\
 \midrule\\ \endhead
 \bottomrule\endfoot
 
@@ -83,17 +80,24 @@ Students are given the following five options for responses to each survey quest
 \end{center}
 
 \BLOCK{ if questions_mc and questions_la -}
+\newpage
+\thispagestyle{head}
+
 \section*{Open answer questions}
+
+Students were given the opportunity to respond to each of the following questions.
+Responses were optional.
+
 %- for question in questions_la
 \subsection*{\VAR{question['text']}}
 \BLOCK{- if question['responses'] }
 \begin{itemize}
-%- for response in question['responses']
-\item \VAR{response}
+%- for comment in question['comments']
+\item \VAR{comment | escape_latex}
 %- endfor
 \end{itemize}
 \BLOCK{ else }
-No responses were recorded to this question
+No responses were recorded for this question.
 \BLOCK{ endif }
 %- endfor
 \BLOCK{- endif }
