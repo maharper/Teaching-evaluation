@@ -4,14 +4,16 @@
 
 import csv
 import os
-# not used in the current incarnation
-from decimal import *
 import json
 from pathlib import Path
+import re
+# not used in the current incarnation
+from decimal import *
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 import stats
+from filter_lib import j2_latex_filter
 
 def main():
 
@@ -40,27 +42,31 @@ def main():
             # Survey Monkey summary files
             if f[-4:] == '.csv':
                 course = course_sm(f)
-                if not course : pass
-                output_file = Path(direc)/Path(tex_filename(course)+'.tex')
-                if not output_file.is_file():
-                    unevaluated.append({'data_file':Path(direc)/Path(f), 'type':'sm_summary', 'course':course, 'tex_file':output_file})
+                if course :
+                    output_file = Path(direc)/Path(tex_filename(course)+'.tex')
+                    if not output_file.is_file():
+                        unevaluated.append({'data_file':Path(direc)/Path(f), 'type':'sm_summary', 'course':course, 'tex_file':output_file})
 
         for report in unevaluated:
             print(f"Processing {report['data_file']}.")
             if report['type'] == 'opscan':
                 questions_mc = questions_opscan_mc
                 questions_la = questions_opscan_la
+
                 #Read csv data from good old scan-o-matic 2000.
-                with open(report['data_file'], 'r') as rawdata:
+                with open(report['data_file'], 'r', encoding='utf-8') as rawdata:
                     reader = csv.reader(rawdata)
                     str_eval_scores = list(reader)
+
                 #Create a list of lists of integer scores for each question. Throw away the blanks.
                 eval_scores = clean_opscan_data(str_eval_scores)
+
                 # Sanity check
                 if len(eval_scores) != len(questions_mc):
                     raise SystemExit(f"Wrong number of questions in {report['data_file']}.  Stopping.")
+
                 #Find frequences for each question.
-                freqs = []
+#                freqs = []
                 for i in range(len(eval_scores)):
                     counts_list = [0,0,0,0,0]
                     for j in range(len(eval_scores[i])):
@@ -74,30 +80,39 @@ def main():
                             counts_list[3]+=1
                         elif((eval_scores[i])[j] == 5):
                             counts_list[4]+=1
-                    freqs.append(counts_list)
+#                    freqs.append(counts_list)
+                    questions_mc[i]['freqs'] = counts_list
+                    questions_mc[i]['responses'] = stats.n_f(counts_list)
 
-                max_responses = max([stats.n_f(counts) for counts in freqs])
+            elif report['type'] == 'sm_summary':
+                with open(report['data_file'], 'r') as data_file:
+                    sm_summary_data = data_file.read()
+                questions_mc, questions_la = parse_sm_summary(sm_summary_data)
+                if questions_la:
+                    for question in questions_la:
+                        sm_comment_file = report['data_file'].parent/('Q'+question['number']+'_Text.csv')
+                        question['comments'] = sm_summary_comments(sm_comment_file)
 
+            max_responses_mc = max([question['responses'] for question in questions_mc])
             for i in range(len(questions_mc)):
-                questions_mc[i]['responses'], questions_mc[i]['mean'], questions_mc[i]['stdev'] = stats.stats_f(freqs[i])
-                questions_mc[i]['freqs'] = [str(x) for x in freqs[i]]
-                questions_mc[i]['sparks'] = [freqs[i][j]/max_responses for j in range(5)]
+                _ , questions_mc[i]['mean'], questions_mc[i]['stdev'] = stats.stats_f(questions_mc[i]['freqs'])
+                questions_mc[i]['sparks'] = [questions_mc[i]['freqs'][j]/max_responses_mc for j in range(5)]
 
             tex_document = template.render(
-                {'course':course,
+                {'course':report['course'],
                 'questions_mc':questions_mc,
                 'questions_la':questions_la,
                 },
                 undefined=StrictUndefined)
 
             #Write the tex file.
-            with open(report['tex_file'], 'w') as eval_report:
-                print(f"Writing {report['tex_file']}.")
+            with open(report['tex_file'], 'w', encoding='utf-8') as eval_report:
+                print(f"Writing file {report['tex_file']}.")
                 eval_report.write(tex_document)
 
 def configure_opscan_data(question_texts):
     """Read and return the question texts (list of dicts) for opscan questionnaires."""
-    with open(question_texts, 'r') as question_file:
+    with open(question_texts, 'r', encoding='utf-8') as question_file:
         return json.load(question_file), False
 
 def configure_tex(template_file):
@@ -116,6 +131,8 @@ def configure_tex(template_file):
         autoescape = False,
         loader=file_loader,
         )
+    latex_jinja_env.filters['escape_latex'] = j2_latex_filter
+
     return latex_jinja_env.get_template(template_file)
 
 def course_opscan(filename):
@@ -145,6 +162,18 @@ def course_opscan(filename):
 
 def course_sm(filename):
     """Extract teacher, section, and term information from a csv filename and return as dict.  Return False if it is not possible."""
+    regex = r'''^Department\ of\ Mathematics\ Course\ Evaluation\ Survey\s+ # Detect Survey Monkey file
+(?P<term>\b\w+\b)\s+ # term
+(?P<year>\d{4})\s+ # four digit year
+(?P<course>[\w-]+)\s+ # Course nummber composed of alphanumerics and hyphen
+section\s+0*(?P<section>\d{2})\s+ # Section number truncated to two digits
+(?P<first>\b\w+\b)\s+ # First name
+(?P<rest>.+) # The rest of the name
+\.csv'''
+    sm_match = re.search(regex, filename, re.VERBOSE)
+    if sm_match:
+        teacher_name = [sm_match.group('first'), sm_match.group('rest')]
+        return dict(zip(('course','section', 'year','term'),sm_match.group('course','section','year','term'))) | {'teacher':teacher_name}
     return False
 
 def tex_filename(course):
@@ -170,7 +199,67 @@ def clean_opscan_data(raw_data):
         clean_data.append(cleaned_column)
     return clean_data
 
+def parse_sm_summary(sm_summary_data):
+    """Parses the Survey Monkey summary file (as a string) and returns a list of dicts of
+    multiple choice question texts, total responses, and category frequencies and
+    a list of dicts of long answer questions texts and individual responses.
+    """
+    rx_questions_mc = re.compile(r"""
+        ^
+        Q(?P<q_number>\d{1,2})\.\s*
+        (?P<q_text>.+)$\n
+        Answer\s+Choices\s*,\s*Response\s+Percent\s*,\s*Responses\s*
+        (?P<q_freqs>[\s\S]*?)\n
+        \s*,\s*Answered\s*,(?P<q_responses>\d+)
+        [\s\S]*?
+        (?=^Q|\Z)
+    """, re.MULTILINE | re.VERBOSE)
+
+    rx_freqs = re.compile(r'^\s*.+,\s*.+\s*,\s*(\d+)$', re.MULTILINE | re.VERBOSE)
+
+    # replace sticky spaces with spaces, else LaTeX complains
+    # sm_summary_data.replace("\xc2\xa0",' ')
+    # Could do this in jinja instead
+    questions_mc = [{'number':question.group('q_number'),
+                        'text':question.group('q_text'),
+                        'responses':int(question.group('q_responses')),
+                        'freqs':[int(count) for count in rx_freqs.findall(question.group('q_freqs'))],
+                        } for question in rx_questions_mc.finditer(sm_summary_data.replace("\xc2\xa0",' '))]
+    
+    rx_questions_la = re.compile(r"""
+        ^
+        Q(?P<q_number>\d{1,2})\.\s*
+        (?P<q_text>.+)$\n
+        \s*Answered\s*,(?P<q_responses>\d+)
+        [\s\S]*?
+        (?=^Q|\Z)
+    """, re.MULTILINE | re.VERBOSE)
+
+    questions_la = [{'number':question.group('q_number'),
+                        'text':question.group('q_text'),
+                        'responses':int(question.group('q_responses')),
+                        } for question in rx_questions_la.finditer(sm_summary_data.replace("\xc2\xa0",' '))]
+
+    return questions_mc, questions_la
+
+def sm_summary_comments(comment_file_path):
+    """Parse the comments from a Survey Monkey file.  Return a list of comments."""
+    if comment_file_path.is_file():
+        with open(comment_file_path, 'r', encoding='utf-8') as comments:
+            question_text = comments.readline()
+            reader = csv.DictReader(comments)
+            next(comments)
+            cols = reader.fieldnames
+            if 'Responses' not in cols:
+                print(f"    A column labelled 'Reponses' was not found in {comment_file_path}")
+                return [f"Responses column not found in {comment_file_path}"]
+            return [line['Responses'] for line in reader]
+    else:
+        print(f"    The comment file {comment_file_path} was not found")
+        return [f"The comment file {comment_file_path} was not found"]
+
 # Not used in the current incarnation
+# The rounding and truncating is done by jinja
 def format(x):
     str(Decimal(x).quantize(Decimal('.01')))
 
