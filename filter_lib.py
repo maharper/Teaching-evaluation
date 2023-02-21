@@ -22,11 +22,7 @@ def j2_latex_filter(string):
         '}':r'\}',
         }
 
-    print(replacements)
-
     replacements =  dict((re.escape(k), v) for k, v in replacements.items())
-
-    print(replacements)
 
     pattern = re.compile("|".join(replacements.keys()))
 
