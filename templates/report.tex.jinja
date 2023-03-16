@@ -53,18 +53,14 @@ Students are given the following five options for responses to each survey quest
 
 \begin{center}
 \begin{xltabular}{\linewidth}{Xccr}\toprule
-\qquad\qquad\qquad \ \ Question & \ Summary \  & \ Frequencies (1 $\rightarrow$ 5) \  & \\
+\qquad\qquad\qquad \ \ Question & \ Mean \  & \multicolumn{2}{c}{ \ Frequencies (1 $\rightarrow$ 5) \  } \\
 \midrule\\ \endhead
 \bottomrule\endfoot
 
 %- for question in questions_mc
     %- set i = loop.index0
 \multirow{2}{=}{\VAR{question['text']} } &
-    \multirow{2}{*}{}$\overline{x} = \VAR{"%.2f"|format(question['mean'])}$ &
-    \multirow{2}{*}{
-        \BLOCK{- for j in range(question['freqs']|length) -}
-            \VAR{- question['freqs'][j]|string}\VAR{" - " if not loop.last else "" -}
-        \BLOCK{ endfor } } &
+    \multirow{2}{*}{$\overline{x} = \VAR{"%.2f"|format(question['mean'])}$} &
     \multirow{2}{*}{
     \begin{sparkline}{10}
         \sparkrectangle 0 1
@@ -72,9 +68,13 @@ Students are given the following five options for responses to each survey quest
         \sparkspike \VAR{"%.4f"|format(0.1+0.2*j)} \VAR{"%.4f"|format(question['sparks'][j])}
         \BLOCK{ endfor }
     \end{sparkline} 
-}        
+} &
+    \multirow{2}{*}{
+        \BLOCK{- for j in range(question['freqs']|length) -}
+            \VAR{- question['freqs'][j]|string}\VAR{" - " if not loop.last else "" -}
+        \BLOCK{ endfor } }
         \\*
- & $s = \VAR{"%.2f"|format(question['stdev'])}$ & & \\[\myrowskip]
+ & & & \\[\myrowskip]
 %- endfor
 \end{xltabular}
 \end{center}
