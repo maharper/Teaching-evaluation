@@ -39,12 +39,13 @@ def main():
                 if not output_file.is_file():
                     unevaluated.append({'data_file':Path(direc)/Path(f), 'type':'opscan', 'course':course, 'tex_file':output_file})
 
-            # Survey Monkey summary files
+            # Survey Monkey files (csv)
             if f[-4:] == '.csv':
                 course = course_sm(f)
                 if course :
                     output_file = Path(direc)/Path(tex_filename(course)+'.tex')
                     if not output_file.is_file():
+                        with open(Path(direc)/Path(f), 'r') as data_file:
                         unevaluated.append({'data_file':Path(direc)/Path(f), 'type':'sm_summary', 'course':course, 'tex_file':output_file})
 
         for report in unevaluated:
