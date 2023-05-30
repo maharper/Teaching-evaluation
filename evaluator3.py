@@ -46,7 +46,11 @@ def main():
                     output_file = Path(direc)/Path(tex_filename(course)+'.tex')
                     if not output_file.is_file():
                         with open(Path(direc)/Path(f), 'r') as data_file:
-                        unevaluated.append({'data_file':Path(direc)/Path(f), 'type':'sm_summary', 'course':course, 'tex_file':output_file})
+                            line = data_file.readline(80)
+                            if line.startswith('Department of Mathematics Course Evaluation Survey'):
+                                unevaluated.append({'data_file':Path(direc)/Path(f), 'type':'sm_summary', 'course':course, 'tex_file':output_file})
+                            if line.startswith('Respondent ID,Collector ID'):
+                                unevaluated.append({'data_file':Path(direc)/Path(f), 'type':'sm_condensed', 'course':course, 'tex_file':output_file})
 
         for report in unevaluated:
             print(f"Processing {report['data_file']}.")
@@ -85,8 +89,48 @@ def main():
                     questions_mc[i]['freqs'] = counts_list
                     questions_mc[i]['responses'] = stats.n_f(counts_list)
 
+            elif report['type'] == 'sm_condensed':
+                with open(report['data_file'], 'r', encoding='utf-8') as data_file:
+                    reader = csv.reader(data_file,delimiter=',')
+                    cols = next(reader)
+                    types = next(reader)
+                    print(cols)
+                    print(types)
+                    questions_mc = []
+                    questions_la = []
+                    for i in range(len(cols)):
+                        if types[i] == 'Response':
+                            questions_mc.append({'number':i,'text':cols[i],'responses':0,'freqs':[0,0,0,0,0]})
+                        if types[i] == 'Open-Ended Response':
+                            questions_la.append({'number':i,'text':cols[i],'responses':0,'comments':[]})
+                    for row in reader:
+                        for question in questions_mc:
+                            response = int(row[question['number']])
+                            if response:
+                                if 1 <= response <= 5:
+                                    question['responses'] += 1
+                                    question['freqs'][response-1] += 1
+                                else:
+                                    print('response out of range')
+                        for question in questions_la:
+                            response = row[question['number']]
+                            if response:
+                                question['responses'] += 1
+                                question['comments'].append(response)
+                    
+                    """                     for row in reader:
+                                            if 
+                                        types = reader
+                                        sm_summary_data = data_file.read()
+                                    questions_mc, questions_la = parse_sm_summary(sm_summary_data)
+                                    if questions_la:
+                                        for question in questions_la:
+                                            sm_comment_file = report['data_file'].parent/('Q'+question['number']+'_Text.csv')
+                                            question['comments'] = sm_summary_comments(sm_comment_file)
+                    """
+
             elif report['type'] == 'sm_summary':
-                with open(report['data_file'], 'r') as data_file:
+                with open(report['data_file'], 'r', encoding='utf-8') as data_file:
                     sm_summary_data = data_file.read()
                 questions_mc, questions_la = parse_sm_summary(sm_summary_data)
                 if questions_la:
