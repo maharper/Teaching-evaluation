@@ -32,6 +32,8 @@ def main():
         # This is not as elegant as Brendan's technique, but it allows us to track both .csv and .asc
         unevaluated = []
         for f in files:
+#             print(f)
+
             # opscan files
             if f[-4:] == '.asc':
                 course = course_opscan(f)
@@ -45,7 +47,7 @@ def main():
                 if course :
                     output_file = Path(direc)/Path(tex_filename(course)+'.tex')
                     if not output_file.is_file():
-                        with open(Path(direc)/Path(f), 'r') as data_file:
+                        with open(Path(direc)/Path(f), 'r', encoding="utf8") as data_file:
                             line = data_file.readline(80)
                             if line.startswith('Department of Mathematics Course Evaluation Survey'):
                                 unevaluated.append({'data_file':Path(direc)/Path(f), 'type':'sm_summary', 'course':course, 'tex_file':output_file})
@@ -94,8 +96,8 @@ def main():
                     reader = csv.reader(data_file,delimiter=',')
                     cols = next(reader)
                     types = next(reader)
-                    print(cols)
-                    print(types)
+#                    print(cols)
+#                    print(types)
                     questions_mc = []
                     questions_la = []
                     for i in range(len(cols)):
@@ -104,14 +106,19 @@ def main():
                         if types[i] == 'Open-Ended Response':
                             questions_la.append({'number':i,'text':cols[i],'responses':0,'comments':[]})
                     for row in reader:
+#                        print(row)
+
                         for question in questions_mc:
-                            response = int(row[question['number']])
-                            if response:
-                                if 1 <= response <= 5:
-                                    question['responses'] += 1
-                                    question['freqs'][response-1] += 1
-                                else:
-                                    print('response out of range')
+                            try:
+                                response = int(row[question['number']])
+                            except ValueError:
+                                response = 0
+                            if 1 <= response <= 5:
+                                question['responses'] += 1
+                                question['freqs'][response-1] += 1
+                            else:
+                                print('Line:',row,'\nquestion',question['number'],'is out of range')
+
                         for question in questions_la:
                             response = row[question['number']]
                             if response:
