@@ -20,6 +20,8 @@ def j2_latex_filter(string):
         '\\':r'\textbackslash{}',
         '{':r'\{',
         '}':r'\}',
+        '<':r'\textless{}',
+        '>':r'\textgreater{}',
         }
 
     replacements =  dict((re.escape(k), v) for k, v in replacements.items())
